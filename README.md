@@ -58,7 +58,7 @@ python main.py
 
 🧑‍💻 Author
 
-Ibrahim Olatomiwa David
+Ibrahim Olatomiwa David   
 📧 ibrahimolatomiwa15@gmail.com <a href="mailto:ibrahimolatomiwa15@gmail.com">  
 🔗 LinkedIn  <a href="https://www.linkedin.com/in/ibrahimolatomiwa">  
 🌍 Portfolio  <a href="https://olatomiwaportfolio-rho.vercel.app/#">  
