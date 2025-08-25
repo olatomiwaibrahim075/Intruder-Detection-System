@@ -9,7 +9,8 @@
 This is a **demo version** of an Intruder Detection System designed to simulate how motion or intrusion can be detected in a secure area.  
 It is not a full production system but serves as a **concept project** to demonstrate security monitoring and alert logic.
 
-👉 **Note:** This is a demo project. If you’d like a **fully functional and complete Intruder Detection System**, feel free to contact me.
+👉 **Note:** This is a demo project. If you’d like a **fully functional and complete Intruder Detection System**, feel free to contact me.  
+📧 ibrahimolatomiwa15@gmail.com
 
 ---
 
@@ -31,27 +32,38 @@ It is not a full production system but serves as a **concept project** to demons
 ---
 
 ## 🚀 Getting Started
-Clone the repository:
+1. Clone the repository:
 ```bash
 git clone https://github.com/olatomiwaibrahim075/Intruder-Detection-System.git
+ ```
 
-Install dependencies:
+2. Install dependencies:
+```bash
 pip install -r requirements.txt
+```
 
-Run the system:
+3. Run the system:
+```bash
 python main.py
+```
 
-🌐 Live Preview
+---
+
+## 🌐 Live Preview
 
 🔗 (Coming soon...)
 (Demo preview link can be added here if hosted later.)
 
+---
+
 🧑‍💻 Author
 
 Ibrahim Olatomiwa David
-📧 ibrahimolatomiwa15@gmail.com
-🔗 LinkedIn
-🌍 Portfolio
+📧 ibrahimolatomiwa15@gmail.com <a href="mailto:ibrahimolatomiwa15@gmail.com">  
+🔗 LinkedIn  <a href="https://www.linkedin.com/in/ibrahimolatomiwa">  
+🌍 Portfolio  <a href="https://olatomiwaportfolio-rho.vercel.app/#">  
+
+---
 
 📜 License
 
