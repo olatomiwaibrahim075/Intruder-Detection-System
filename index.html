@@ -1,0 +1,1053 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecureVision - Intruder Detection System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+    <style id="app-style">
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a;
+            color: #e2e8f0;
+            min-height: 100vh;
+        }
+
+        .loader {
+            border: 5px solid #334155;
+            border-radius: 50%;
+            border-top: 5px solid #3b82f6;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .toast {
+            position: fixed;
+            right: 20px;
+            bottom: 20px;
+            padding: 12px 20px;
+            background: #10b981;
+            color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s ease-in-out;
+            z-index: 1000;
+        }
+
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .flash-border {
+            animation: flash 1s infinite;
+        }
+
+        @keyframes flash {
+            0%, 100% { border-color: transparent; }
+            50% { border-color: #ef4444; }
+        }
+
+        .sidebar {
+            transition: width 0.3s ease-in-out;
+        }
+
+        .overlay {
+            position: fixed;
+            inset: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 40;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .camera-container {
+            position: relative;
+            background-color: #1e293b;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .camera-feed {
+            width: 100%;
+            height: 0;
+            padding-bottom: 56.25%; /* 16:9 aspect ratio */
+            position: relative;
+            background-color: #0f172a;
+        }
+
+        .camera-feed video, 
+        .camera-feed canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .status-indicator {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .status-indicator.enabled {
+            background-color: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+        }
+
+        .status-indicator.disabled {
+            background-color: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+
+        .pulse {
+            height: 10px;
+            width: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 5px;
+        }
+
+        .pulse.enabled {
+            background-color: #10b981;
+            animation: pulse 2s infinite;
+        }
+
+        .pulse.disabled {
+            background-color: #ef4444;
+        }
+
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+            }
+            70% {
+                box-shadow: 0 0 0 10px rgba(16, 185, 129, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+            }
+        }
+
+        .event-card {
+            background: linear-gradient(145deg, #1e293b, #1a1e2b);
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .event-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+        }
+
+        .event-thumbnail {
+            width: 100%;
+            height: 160px;
+            object-fit: cover;
+            border-radius: 8px 8px 0 0;
+        }
+
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #374151;
+            transition: .4s;
+            border-radius: 24px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: #3b82f6;
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+
+        /* Custom select styling */
+        .custom-select {
+            position: relative;
+            background-color: #1e293b;
+            border: 1px solid #374151;
+            border-radius: 6px;
+            padding: 8px 16px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .custom-select .arrow {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            transition: transform 0.3s ease;
+        }
+
+        .custom-select.open .arrow {
+            transform: translateY(-50%) rotate(180deg);
+        }
+
+        .select-options {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background-color: #1e293b;
+            border: 1px solid #374151;
+            border-top: none;
+            border-radius: 0 0 6px 6px;
+            z-index: 10;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+
+        .custom-select.open .select-options {
+            max-height: 200px;
+        }
+
+        .select-option {
+            padding: 8px 16px;
+            cursor: pointer;
+        }
+
+        .select-option:hover {
+            background-color: #2d3748;
+        }
+
+        .tab-active {
+            color: #3b82f6;
+            border-bottom: 2px solid #3b82f6;
+        }
+
+        .intruder-alert {
+            animation: alert 1s infinite;
+        }
+
+        @keyframes alert {
+            0% { background-color: rgba(239, 68, 68, 0.2); }
+            50% { background-color: rgba(239, 68, 68, 0.5); }
+            100% { background-color: rgba(239, 68, 68, 0.2); }
+        }
+    </style>
+</head>
+<body class="text-gray-200">
+    <!-- Login Screen -->
+    <div id="login-screen" class="flex items-center justify-center min-h-screen px-4">
+        <div class="w-full max-w-md p-8 space-y-8 bg-slate-800 rounded-xl shadow-2xl">
+            <div class="text-center">
+                <h1 class="text-3xl font-bold text-blue-500 flex items-center justify-center gap-3">
+                    <i class="fas fa-shield-alt"></i> SecureVision
+                </h1>
+                <p class="mt-2 text-gray-400">Intruder Detection System</p>
+            </div>
+            <form id="login-form" class="mt-8 space-y-6">
+                <div class="rounded-md shadow-sm space-y-4">
+                    <div>
+                        <label for="username" class="text-sm font-medium text-gray-300">Username</label>
+                        <input id="username" name="username" type="text" required class="appearance-none rounded-lg relative block w-full px-4 py-3 mt-1 border border-gray-700 bg-slate-900 text-gray-300 placeholder-gray-500 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm">
+                    </div>
+                    <div>
+                        <label for="password" class="text-sm font-medium text-gray-300">Password</label>
+                        <input id="password" name="password" type="password" required class="appearance-none rounded-lg relative block w-full px-4 py-3 mt-1 border border-gray-700 bg-slate-900 text-gray-300 placeholder-gray-500 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm">
+                    </div>
+                </div>
+
+                <div>
+                    <button type="submit" class="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                        <span class="absolute left-0 inset-y-0 flex items-center pl-3">
+                            <i class="fas fa-lock text-blue-500 group-hover:text-blue-400"></i>
+                        </span>
+                        Sign in securely
+                    </button>
+                </div>
+                
+                <div class="text-sm text-center">
+                    <p class="text-gray-500">For demo purposes: Username: admin | Password: admin123</p>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main Dashboard -->
+    <div id="dashboard" class="hidden min-h-screen">
+        <!-- Mobile Header -->
+        <header class="bg-slate-800 p-4 flex items-center justify-between md:hidden border-b border-slate-700">
+            <div class="flex items-center space-x-3">
+                <button id="mobile-menu-button" class="text-gray-400 hover:text-white">
+                    <i class="fas fa-bars text-xl"></i>
+                </button>
+                <h1 class="text-xl font-bold text-blue-500">SecureVision</h1>
+            </div>
+            <div class="flex items-center space-x-4">
+                <button id="logout-button-mobile" class="text-gray-400 hover:text-white">
+                    <i class="fas fa-sign-out-alt"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- Mobile sidebar overlay -->
+        <div id="overlay" class="overlay md:hidden"></div>
+
+        <!-- Sidebar -->
+        <aside id="sidebar" class="fixed top-0 left-0 z-50 h-full w-64 bg-slate-800 border-r border-slate-700 transform -translate-x-full md:translate-x-0 transition-all duration-300">
+            <div class="flex items-center justify-between p-4 border-b border-slate-700">
+                <div class="flex items-center space-x-3">
+                    <i class="fas fa-shield-alt text-blue-500 text-2xl"></i>
+                    <h1 class="text-xl font-bold text-blue-500">SecureVision</h1>
+                </div>
+                <button id="close-sidebar" class="text-gray-400 hover:text-white md:hidden">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="p-4">
+                <div class="flex items-center space-x-3 mb-6">
+                    <div class="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center">
+                        <i class="fas fa-user"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-medium">Admin User</h3>
+                        <p class="text-sm text-gray-400">System Administrator</p>
+                    </div>
+                </div>
+                <nav class="space-y-1">
+                    <a href="javascript:void(0)" class="nav-link flex items-center space-x-3 py-3 px-4 rounded-lg text-gray-300 hover:bg-slate-700" data-view="live-feed">
+                        <i class="fas fa-video w-5"></i>
+                        <span>Live Feed</span>
+                    </a>
+                    <a href="javascript:void(0)" class="nav-link flex items-center space-x-3 py-3 px-4 rounded-lg text-gray-300 hover:bg-slate-700" data-view="events">
+                        <i class="fas fa-history w-5"></i>
+                        <span>Events</span>
+                    </a>
+                    <a href="javascript:void(0)" class="nav-link flex items-center space-x-3 py-3 px-4 rounded-lg text-gray-300 hover:bg-slate-700" data-view="settings">
+                        <i class="fas fa-cog w-5"></i>
+                        <span>Settings</span>
+                    </a>
+                </nav>
+            </div>
+            <div class="absolute bottom-0 w-full p-4 border-t border-slate-700">
+                <button id="logout-button" class="w-full flex items-center justify-center space-x-2 py-2 px-4 rounded-lg text-gray-300 hover:bg-slate-700">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span>Logout</span>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="md:ml-64 min-h-screen bg-slate-900">
+            <div id="content" class="p-4 md:p-6">
+                <!-- Views will be loaded here -->
+                
+                <!-- Live Feed View -->
+                <div id="live-feed-view" class="hidden">
+                    <div class="mb-6">
+                        <h2 class="text-2xl font-bold">Live Camera Feed</h2>
+                        <p class="text-gray-400 mt-1">Monitor your space in real-time with AI-powered detection</p>
+                    </div>
+                    
+                    <div class="camera-container mb-6">
+                        <div class="camera-feed">
+                            <video id="video-feed" autoplay muted></video>
+                            <canvas id="detection-canvas"></canvas>
+                        </div>
+                        <div id="status-indicator" class="status-indicator disabled">
+                            <span class="pulse disabled"></span>
+                            <span>Detection Disabled</span>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-slate-800 rounded-lg p-4 mb-6">
+                        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div class="flex items-center space-x-3">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="detection-toggle">
+                                    <span class="slider"></span>
+                                </label>
+                                <span class="text-sm font-medium">Enable Detection</span>
+                            </div>
+                            
+                            <div class="flex items-center space-x-3">
+                                <span class="text-sm font-medium">Sensitivity:</span>
+                                <div class="custom-select w-32">
+                                    <div class="selected-option" id="sensitivity-display">Medium</div>
+                                    <i class="fas fa-chevron-down arrow"></i>
+                                    <div class="select-options">
+                                        <div class="select-option" data-value="low">Low</div>
+                                        <div class="select-option" data-value="medium">Medium</div>
+                                        <div class="select-option" data-value="high">High</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-slate-800 rounded-lg p-4">
+                        <h3 class="text-lg font-medium mb-3">Detection Statistics</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div class="bg-slate-700 p-4 rounded-lg">
+                                <p class="text-gray-400 text-sm">Today</p>
+                                <p class="text-2xl font-bold">0</p>
+                                <p class="text-sm text-gray-400">detections</p>
+                            </div>
+                            <div class="bg-slate-700 p-4 rounded-lg">
+                                <p class="text-gray-400 text-sm">This Week</p>
+                                <p class="text-2xl font-bold">0</p>
+                                <p class="text-sm text-gray-400">detections</p>
+                            </div>
+                            <div class="bg-slate-700 p-4 rounded-lg">
+                                <p class="text-gray-400 text-sm">This Month</p>
+                                <p class="text-2xl font-bold">0</p>
+                                <p class="text-sm text-gray-400">detections</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Events View -->
+                <div id="events-view" class="hidden">
+                    <div class="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+                        <div>
+                            <h2 class="text-2xl font-bold">Events History</h2>
+                            <p class="text-gray-400 mt-1">Review past intrusion events and detections</p>
+                        </div>
+                        <div class="flex space-x-2">
+                            <button class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg flex items-center space-x-2">
+                                <i class="fas fa-download"></i>
+                                <span>Export Logs</span>
+                            </button>
+                            <button class="bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-lg flex items-center space-x-2">
+                                <i class="fas fa-trash"></i>
+                                <span>Clear Logs</span>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-slate-800 rounded-lg p-4 mb-6">
+                        <div class="flex border-b border-slate-700">
+                            <button class="tab-active py-2 px-4 font-medium">All Events</button>
+                            <button class="py-2 px-4 text-gray-400 font-medium">Motion Detected</button>
+                            <button class="py-2 px-4 text-gray-400 font-medium">Face Detected</button>
+                        </div>
+                    </div>
+                    
+                    <div id="events-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div class="bg-slate-800 rounded-lg p-4 text-center py-10">
+                            <i class="fas fa-clipboard-list text-gray-500 text-4xl mb-4"></i>
+                            <p class="text-gray-400">No events have been recorded yet.</p>
+                            <p class="text-gray-500 text-sm mt-2">Events will appear here when intrusions are detected.</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Settings View -->
+                <div id="settings-view" class="hidden">
+                    <div class="mb-6">
+                        <h2 class="text-2xl font-bold">System Settings</h2>
+                        <p class="text-gray-400 mt-1">Configure your detection system preferences</p>
+                    </div>
+                    
+                    <div class="bg-slate-800 rounded-lg p-6 mb-6">
+                        <h3 class="text-lg font-medium mb-4">Camera Configuration</h3>
+                        
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Camera Source</label>
+                                <div class="flex space-x-4">
+                                    <label class="inline-flex items-center">
+                                        <input type="radio" name="camera-source" value="webcam" checked class="form-radio text-blue-600">
+                                        <span class="ml-2">Webcam</span>
+                                    </label>
+                                    <label class="inline-flex items-center">
+                                        <input type="radio" name="camera-source" value="ip-camera" class="form-radio text-blue-600">
+                                        <span class="ml-2">IP Camera</span>
+                                    </label>
+                                    <label class="inline-flex items-center">
+                                        <input type="radio" name="camera-source" value="test-video" class="form-radio text-blue-600">
+                                        <span class="ml-2">Test Video</span>
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <div id="ip-camera-settings" class="hidden">
+                                <label class="block text-sm font-medium mb-1">RTSP/HTTP URL</label>
+                                <input type="text" id="ip-camera-url" class="w-full rounded-lg border border-slate-700 bg-slate-900 py-2 px-4 text-sm" placeholder="rtsp://example.com/stream">
+                                <p class="text-xs text-gray-500 mt-1">Enter the URL of your IP camera stream</p>
+                            </div>
+                            
+                            <div id="test-video-settings" class="hidden">
+                                <label class="block text-sm font-medium mb-1">Select Test Video</label>
+                                <select id="test-video-select" class="w-full rounded-lg border border-slate-700 bg-slate-900 py-2 px-4 text-sm">
+                                    <option value="office">Office Scene</option>
+                                    <option value="hallway">Hallway Scene</option>
+                                    <option value="entrance">Entrance Scene</option>
+                                </select>
+                                <p class="text-xs text-gray-500 mt-1">Choose a sample video to test detection</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-slate-800 rounded-lg p-6 mb-6">
+                        <h3 class="text-lg font-medium mb-4">Notification Settings</h3>
+                        
+                        <div class="space-y-4">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <h4 class="font-medium">Email Notifications</h4>
+                                    <p class="text-sm text-gray-400">Receive email alerts when intrusions are detected</p>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="email-toggle" checked>
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+                            
+                            <div id="email-settings">
+                                <label class="block text-sm font-medium mb-1">Email Address</label>
+                                <input type="email" class="w-full rounded-lg border border-slate-700 bg-slate-900 py-2 px-4 text-sm" placeholder="admin@example.com">
+                            </div>
+                            
+                            <div class="flex items-center justify-between pt-2">
+                                <div>
+                                    <h4 class="font-medium">SMS Notifications</h4>
+                                    <p class="text-sm text-gray-400">Receive SMS alerts when intrusions are detected</p>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="sms-toggle">
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+                            
+                            <div id="sms-settings" class="hidden">
+                                <label class="block text-sm font-medium mb-1">Phone Number</label>
+                                <input type="tel" class="w-full rounded-lg border border-slate-700 bg-slate-900 py-2 px-4 text-sm" placeholder="+1 (555) 123-4567">
+                            </div>
+                            
+                            <div class="flex items-center justify-between pt-2">
+                                <div>
+                                    <h4 class="font-medium">Push Notifications</h4>
+                                    <p class="text-sm text-gray-400">Receive browser push notifications</p>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="push-toggle" checked>
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-slate-800 rounded-lg p-6 mb-6">
+                        <h3 class="text-lg font-medium mb-4">Detection Settings</h3>
+                        
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Detection Types</label>
+                                <div class="space-y-2">
+                                    <label class="inline-flex items-center">
+                                        <input type="checkbox" checked class="form-checkbox text-blue-600">
+                                        <span class="ml-2">Motion Detection</span>
+                                    </label>
+                                    <label class="inline-flex items-center block">
+                                        <input type="checkbox" checked class="form-checkbox text-blue-600">
+                                        <span class="ml-2">Human Detection</span>
+                                    </label>
+                                    <label class="inline-flex items-center block">
+                                        <input type="checkbox" class="form-checkbox text-blue-600">
+                                        <span class="ml-2">Face Recognition</span>
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Detection Sensitivity</label>
+                                <select class="w-full rounded-lg border border-slate-700 bg-slate-900 py-2 px-4 text-sm">
+                                    <option value="low">Low</option>
+                                    <option value="medium" selected>Medium</option>
+                                    <option value="high">High</option>
+                                </select>
+                                <p class="text-xs text-gray-500 mt-1">Higher sensitivity may lead to more false positives</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex justify-end">
+                        <button id="save-settings" class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-6 rounded-lg flex items-center space-x-2">
+                            <i class="fas fa-save"></i>
+                            <span>Save Settings</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    
+    <!-- Toast Notification -->
+    <div id="toast" class="toast">
+        <div class="flex items-center space-x-2">
+            <i class="fas fa-bell"></i>
+            <span id="toast-message">Notification sent successfully!</span>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="fixed inset-0 bg-black bg-opacity-70 z-50 hidden flex-col items-center justify-center">
+        <div class="loader mb-4"></div>
+        <p class="text-xl text-white" id="loading-message">Loading...</p>
+    </div>
+
+    <script id="app-script">
+        document.addEventListener('DOMContentLoaded', function() {
+            // Login functionality
+            const loginForm = document.getElementById('login-form');
+            const loginScreen = document.getElementById('login-screen');
+            const dashboard = document.getElementById('dashboard');
+            
+            loginForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const username = document.getElementById('username').value;
+                const password = document.getElementById('password').value;
+                
+                // Simple validation - in a real app, this would be an API call
+                if (username === 'admin' && password === 'admin123') {
+                    showLoading('Logging in...');
+                    setTimeout(() => {
+                        loginScreen.classList.add('hidden');
+                        dashboard.classList.remove('hidden');
+                        hideLoading();
+                        // Initialize with live feed view
+                        showView('live-feed');
+                    }, 1500);
+                } else {
+                    showToast('Invalid credentials. Please try again.');
+                }
+            });
+            
+            // Mobile menu toggle
+            const mobileMenuButton = document.getElementById('mobile-menu-button');
+            const closeSidebarButton = document.getElementById('close-sidebar');
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('overlay');
+            
+            mobileMenuButton.addEventListener('click', function() {
+                sidebar.classList.remove('-translate-x-full');
+                overlay.classList.add('active');
+            });
+            
+            closeSidebarButton.addEventListener('click', function() {
+                sidebar.classList.add('-translate-x-full');
+                overlay.classList.remove('active');
+            });
+            
+            overlay.addEventListener('click', function() {
+                sidebar.classList.add('-translate-x-full');
+                overlay.classList.remove('active');
+            });
+            
+            // Navigation
+            const navLinks = document.querySelectorAll('.nav-link');
+            navLinks.forEach(link => {
+                link.addEventListener('click', function() {
+                    const view = this.getAttribute('data-view');
+                    showView(view);
+                    
+                    // On mobile, close the sidebar
+                    if (window.innerWidth < 768) {
+                        sidebar.classList.add('-translate-x-full');
+                        overlay.classList.remove('active');
+                    }
+                    
+                    // Update active state
+                    navLinks.forEach(link => link.classList.remove('bg-slate-700', 'text-white'));
+                    this.classList.add('bg-slate-700', 'text-white');
+                });
+            });
+            
+            // View switching
+            function showView(viewName) {
+                const views = ['live-feed-view', 'events-view', 'settings-view'];
+                views.forEach(view => {
+                    document.getElementById(view).classList.add('hidden');
+                });
+                document.getElementById(`${viewName}-view`).classList.remove('hidden');
+                
+                // Special initialization for views
+                if (viewName === 'live-feed') {
+                    initializeCamera();
+                }
+            }
+            
+            // Detection toggle
+            const detectionToggle = document.getElementById('detection-toggle');
+            const statusIndicator = document.getElementById('status-indicator');
+            
+            detectionToggle.addEventListener('change', function() {
+                if (this.checked) {
+                    statusIndicator.classList.remove('disabled');
+                    statusIndicator.classList.add('enabled');
+                    statusIndicator.innerHTML = '<span class="pulse enabled"></span><span>Detection Enabled</span>';
+                    showToast('Intruder detection enabled');
+                    
+                    // Start detection simulation
+                    startDetection();
+                } else {
+                    statusIndicator.classList.remove('enabled');
+                    statusIndicator.classList.add('disabled');
+                    statusIndicator.innerHTML = '<span class="pulse disabled"></span><span>Detection Disabled</span>';
+                    showToast('Intruder detection disabled');
+                    
+                    // Stop detection simulation
+                    stopDetection();
+                }
+            });
+            
+            // Custom select dropdown
+            const customSelect = document.querySelector('.custom-select');
+            const selectedOption = document.getElementById('sensitivity-display');
+            
+            customSelect.addEventListener('click', function() {
+                this.classList.toggle('open');
+            });
+            
+            document.addEventListener('click', function(e) {
+                if (!customSelect.contains(e.target)) {
+                    customSelect.classList.remove('open');
+                }
+            });
+            
+            const selectOptions = document.querySelectorAll('.select-option');
+            selectOptions.forEach(option => {
+                option.addEventListener('click', function() {
+                    const value = this.getAttribute('data-value');
+                    selectedOption.textContent = this.textContent;
+                    customSelect.classList.remove('open');
+                    showToast(`Sensitivity set to ${this.textContent}`);
+                });
+            });
+            
+            // Radio toggles for settings
+            const cameraSourceRadios = document.querySelectorAll('input[name="camera-source"]');
+            const ipCameraSettings = document.getElementById('ip-camera-settings');
+            const testVideoSettings = document.getElementById('test-video-settings');
+            
+            cameraSourceRadios.forEach(radio => {
+                radio.addEventListener('change', function() {
+                    const value = this.value;
+                    ipCameraSettings.classList.add('hidden');
+                    testVideoSettings.classList.add('hidden');
+                    
+                    if (value === 'ip-camera') {
+                        ipCameraSettings.classList.remove('hidden');
+                    } else if (value === 'test-video') {
+                        testVideoSettings.classList.remove('hidden');
+                    }
+                });
+            });
+            
+            // SMS toggle
+            const smsToggle = document.getElementById('sms-toggle');
+            const smsSettings = document.getElementById('sms-settings');
+            
+            smsToggle.addEventListener('change', function() {
+                smsSettings.classList.toggle('hidden', !this.checked);
+            });
+            
+            // Save settings
+            const saveSettingsBtn = document.getElementById('save-settings');
+            saveSettingsBtn.addEventListener('click', function() {
+                showLoading('Saving settings...');
+                
+                // Simulate saving
+                setTimeout(() => {
+                    hideLoading();
+                    showToast('Settings saved successfully');
+                }, 1500);
+            });
+            
+            // Logout functionality
+            const logoutButton = document.getElementById('logout-button');
+            const logoutButtonMobile = document.getElementById('logout-button-mobile');
+            
+            [logoutButton, logoutButtonMobile].forEach(button => {
+                button.addEventListener('click', function() {
+                    showLoading('Logging out...');
+                    setTimeout(() => {
+                        dashboard.classList.add('hidden');
+                        loginScreen.classList.remove('hidden');
+                        hideLoading();
+                        
+                        // Reset form
+                        document.getElementById('username').value = '';
+                        document.getElementById('password').value = '';
+                    }, 1500);
+                });
+            });
+            
+            // Camera initialization
+            async function initializeCamera() {
+                const videoElement = document.getElementById('video-feed');
+                const canvas = document.getElementById('detection-canvas');
+                const cameraSource = document.querySelector('input[name="camera-source"]:checked').value;
+                
+                try {
+                    if (cameraSource === 'webcam') {
+                        // Request access to webcam
+                        const stream = await navigator.mediaDevices.getUserMedia({ 
+                            video: { 
+                                width: { ideal: 1280 },
+                                height: { ideal: 720 } 
+                            }
+                        });
+                        
+                        videoElement.srcObject = stream;
+                        videoElement.play();
+                        
+                    } else if (cameraSource === 'ip-camera') {
+                        const ipCameraUrl = document.getElementById('ip-camera-url').value;
+                        if (!ipCameraUrl) {
+                            showToast('Please enter an IP camera URL');
+                            return;
+                        }
+                        
+                        // Try to connect to IP camera
+                        await connectToIPCamera(videoElement, ipCameraUrl);
+                        
+                    } else if (cameraSource === 'test-video') {
+                        // Use test video
+                        const testVideo = document.getElementById('test-video-select').value;
+                        videoElement.src = getTestVideoUrl(testVideo);
+                        videoElement.play();
+                    }
+                    
+                    // Set up canvas to match video dimensions once metadata is loaded
+                    videoElement.onloadedmetadata = function() {
+                        canvas.width = videoElement.videoWidth;
+                        canvas.height = videoElement.videoHeight;
+                    };
+                    
+                } catch (err) {
+                    console.error('Error accessing the camera: ', err);
+                    showToast('Unable to access camera. Please check permissions.');
+                }
+            }
+            
+            // Connect to IP camera
+            async function connectToIPCamera(videoElement, url) {
+                showLoading('Connecting to IP camera...');
+                
+                try {
+                    // Check if it's an RTSP stream (needs conversion)
+                    if (url.toLowerCase().startsWith('rtsp://')) {
+                        showToast('RTSP streams require server-side processing. Using fallback.');
+                        // For demo purposes, use a placeholder
+                        videoElement.src = 'https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4';
+                    } else if (url.toLowerCase().startsWith('http')) {
+                        // Direct HTTP stream
+                        videoElement.src = url;
+                    } else if (url.toLowerCase().startsWith('rtmp://')) {
+                        showToast('RTMP streams require Flash. Using fallback.');
+                        videoElement.src = 'https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4';
+                    } else {
+                        // Assume it's a local file or device path
+                        videoElement.src = url;
+                    }
+                    
+                    // Wait for video to load
+                    await new Promise((resolve, reject) => {
+                        videoElement.onloadeddata = resolve;
+                        videoElement.onerror = reject;
+                        setTimeout(resolve, 5000); // Timeout after 5 seconds
+                    });
+                    
+                    hideLoading();
+                    showToast('IP camera connected successfully');
+                    
+                } catch (error) {
+                    hideLoading();
+                    console.error('IP camera connection failed:', error);
+                    showToast('Failed to connect to IP camera. Check URL and permissions.');
+                    
+                    // Fallback to webcam
+                    try {
+                        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                        videoElement.srcObject = stream;
+                        showToast('Using webcam as fallback');
+                    } catch (fallbackError) {
+                        showToast('No camera available');
+                    }
+                }
+            }
+            
+            // Get test video URL
+            function getTestVideoUrl(type) {
+                const videos = {
+                    'office': 'https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4',
+                    'hallway': 'https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4',
+                    'entrance': 'https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4'
+                };
+                return videos[type] || videos.office;
+            }
+            
+            // Detection simulation
+            let detectionInterval;
+            let detectionActive = false;
+            
+            function startDetection() {
+                if (detectionActive) return;
+                detectionActive = true;
+                
+                // Simulate random detections
+                detectionInterval = setInterval(() => {
+                    const shouldDetect = Math.random() > 0.85; // 15% chance of detection
+                    
+                    if (shouldDetect) {
+                        simulateDetection();
+                    }
+                }, 5000); // Check every 5 seconds
+            }
+            
+            function stopDetection() {
+                clearInterval(detectionInterval);
+                detectionActive = false;
+            }
+            
+            function simulateDetection() {
+                // Flash the border of the video feed
+                const cameraContainer = document.querySelector('.camera-container');
+                cameraContainer.classList.add('flash-border');
+                
+                setTimeout(() => {
+                    cameraContainer.classList.remove('flash-border');
+                }, 2000);
+                
+                // Show notification
+                showToast('⚠️ Intruder detected!');
+                
+                // Create detection event
+                addDetectionEvent();
+            }
+            
+            function addDetectionEvent() {
+                const eventsList = document.getElementById('events-list');
+                const noEvents = eventsList.querySelector('.bg-slate-800');
+                
+                if (noEvents) {
+                    eventsList.innerHTML = '';
+                }
+                
+                const now = new Date();
+                const timeString = now.toLocaleTimeString();
+                const dateString = now.toLocaleDateString();
+                
+                const eventCard = document.createElement('div');
+                eventCard.className = 'event-card p-4';
+                eventCard.innerHTML = `
+                    <div class="intruder-alert mb-3 p-2 rounded text-center text-red-500 font-medium text-sm">
+                        <i class="fas fa-exclamation-triangle mr-2"></i>Intruder Detected
+                    </div>
+                    <div class="bg-gray-900 h-40 rounded flex items-center justify-center mb-3">
+                        <i class="fas fa-camera text-gray-600 text-4xl"></i>
+                    </div>
+                    <div>
+                        <p class="text-sm font-medium">Detection Type: <span class="text-gray-400">Motion Detected</span></p>
+                        <p class="text-sm font-medium">Time: <span class="text-gray-400">${timeString}</span></p>
+                        <p class="text-sm font-medium">Date: <span class="text-gray-400">${dateString}</span></p>
+                    </div>
+                    <div class="mt-3 flex justify-end">
+                        <button class="bg-blue-600 hover:bg-blue-700 text-xs text-white py-1 px-3 rounded">
+                            View Details
+                        </button>
+                    </div>
+                `;
+                
+                eventsList.prepend(eventCard);
+            }
+            
+            // Toast notifications
+            function showToast(message) {
+                const toast = document.getElementById('toast');
+                const toastMessage = document.getElementById('toast-message');
+                
+                toastMessage.textContent = message;
+                toast.classList.add('show');
+                
+                setTimeout(() => {
+                    toast.classList.remove('show');
+                }, 3000);
+            }
+            
+            // Loading overlay
+            function showLoading(message = 'Loading...') {
+                const loadingOverlay = document.getElementById('loading-overlay');
+                const loadingMessage = document.getElementById('loading-message');
+                
+                loadingMessage.textContent = message;
+                loadingOverlay.classList.remove('hidden');
+                loadingOverlay.classList.add('flex');
+            }
+            
+            function hideLoading() {
+                const loadingOverlay = document.getElementById('loading-overlay');
+                
+                loadingOverlay.classList.remove('flex');
+                loadingOverlay.classList.add('hidden');
+            }
+        });
+    </script>
+</body>
+</html>
